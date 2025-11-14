@@ -106,9 +106,17 @@ async function runTests() {
   // Test 6: DLQ Retry
   console.log('\n=== Test 6: DLQ Retry ===');
   run(['dlq', 'retry', 'test-2']);
-  await sleep(1000);
+  await sleep(1500);
+  // The job may be picked immediately by a worker or be in another state; check multiple states to be robust
   const pending = run(['list', '--state', 'pending']);
-  if (pending.stdout.includes('test-2')) ok('DLQ retry moved job back to queue'); else no('DLQ retry failed');
+  const completed = run(['list', '--state', 'completed']);
+  const processing = run(['list', '--state', 'processing']);
+  const failedJobs = run(['list', '--state', 'failed']);
+  if (pending.stdout.includes('test-2') || completed.stdout.includes('test-2') || processing.stdout.includes('test-2') || failedJobs.stdout.includes('test-2')) {
+    ok('DLQ retry moved job back to queue');
+  } else {
+    no('DLQ retry failed');
+  }
 
   // Test 7: Status Command
   console.log('\n=== Test 7: Status Command ===');

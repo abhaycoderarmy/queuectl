@@ -37,3 +37,7 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# Demo job files created during recording/tests
+job-demo.json
+job-fail.json

@@ -7,7 +7,10 @@ A production-grade CLI-based background job queue system with worker management,
 
 ## 🎬 Demo & Architecture
 
-- Demo video: **[Watch the Demo Video](https://youtu.be/h8cP_wxBPYs?si=BgdR4uv7_SVs9fl1)**
+[![Watch the Demo Video](https://img.youtube.com/vi/h8cP_wxBPYs/0.jpg)](https://youtu.be/h8cP_wxBPYs?si=BgdR4uv7_SVs9fl1)
+
+*Click the thumbnail above to watch the demo on YouTube.*
+
 - Demo automation script: `scripts/demo-automation.ps1` (PowerShell demo that enqueues a job, starts a worker, and verifies results)
 - Architecture docs: `docs/architecture.md` — design overview and component map
 

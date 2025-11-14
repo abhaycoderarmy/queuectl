@@ -5,9 +5,11 @@
 
 A production-grade CLI-based background job queue system with worker management, automatic retry with exponential backoff, and Dead Letter Queue (DLQ) support.
 
-## 🎬 Demo Video
+## 🎬 Demo & Architecture
 
-**[Watch the Demo Video](https://drive.google.com/file/d/YOUR_VIDEO_ID/view)** *(Upload your screen recording here)*
+- Demo video: **[Watch the Demo Video](https://drive.google.com/file/d/YOUR_VIDEO_ID/view)** *(replace with your uploaded recording URL)*
+- Demo automation script: `scripts/demo-automation.ps1` (PowerShell demo that enqueues a job, starts a worker, and verifies results)
+- Architecture docs: `docs/architecture.md` — design overview and component map
 
 ## ✨ Features
 

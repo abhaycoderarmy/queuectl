@@ -173,10 +173,5 @@ Backoff formula: `delay = base ^ attempts` (seconds). Attempts start at 1 when f
 - Replace JSON storage with Redis or SQLite for scale.
 - Add metrics or a simple UI for monitoring.
 
-## License
 
-MIT
 
----
-
-If you want, I can add a CI badge to the README that points to your repository settings or create a small GitHub Actions matrix for multiple Node versions.

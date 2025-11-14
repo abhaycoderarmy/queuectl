@@ -7,7 +7,7 @@ A production-grade CLI-based background job queue system with worker management,
 
 ## 🎬 Demo & Architecture
 
-- Demo video: **[Watch the Demo Video](https://drive.google.com/file/d/YOUR_VIDEO_ID/view)** *(replace with your uploaded recording URL)*
+- Demo video: **[Watch the Demo Video](https://youtu.be/h8cP_wxBPYs?si=BgdR4uv7_SVs9fl1)**
 - Demo automation script: `scripts/demo-automation.ps1` (PowerShell demo that enqueues a job, starts a worker, and verifies results)
 - Architecture docs: `docs/architecture.md` — design overview and component map
 
@@ -46,7 +46,7 @@ A production-grade CLI-based background job queue system with worker management,
 
 ![Node.js Version](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![CI](https://github.com/abhaycoderarmy/IBM-PROJECT/actions/workflows/nodejs.yml/badge.svg)
+
 
 QueueCTL is a small, production-minded CLI job queue. It supports enqueuing shell commands, running multiple workers, automatic retries with exponential backoff, and a Dead Letter Queue (DLQ). Jobs are persisted to JSON files so state survives restarts.
 
@@ -62,7 +62,7 @@ Requirements: Node.js >= 14, npm
 Clone and install:
 
 ```bash
-git clone https://github.com/abhaycoderarmy/IBM-PROJECT.git
+git clone https://github.com/abhaycoderarmy/queuectl.git
 cd queuectl
 npm install
 ```

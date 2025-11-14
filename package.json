@@ -1,0 +1,38 @@
+{
+  "name": "queuectl",
+  "version": "1.0.0",
+  "description": "CLI-based background job queue system with retry and DLQ support",
+  "main": "bin/queuectl.js",
+  "bin": {
+    "queuectl": "./bin/queuectl.js"
+  },
+  "scripts": {
+    "start": "node bin/queuectl.js",
+    "dev": "nodemon bin/queuectl.js",
+    "test": "node tests/test-scenarios.js",
+    "link": "npm link"
+  },
+  "keywords": [
+    "queue",
+    "job",
+    "worker",
+    "cli",
+    "background-jobs"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.1.0",
+    "chalk": "^4.1.2",
+    "better-sqlite3": "^9.2.2",
+    "uuid": "^9.0.1",
+    "date-fns": "^2.30.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

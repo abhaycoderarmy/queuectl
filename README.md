@@ -1,382 +1,182 @@
-# QueueCTL - Background Job Queue System
+# QueueCTL - Job Queue Management System
 
-A production-grade CLI-based background job queue system built with Node.js, featuring worker processes, automatic retries with exponential backoff, and a Dead Letter Queue (DLQ).
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🎥 Demo Video
+A production-grade CLI-based background job queue system with worker management, automatic retry with exponential backoff, and Dead Letter Queue (DLQ) support.
 
-[Link to Demo Video](https://drive.google.com/your-demo-video-link)
+## 🎬 Demo Video
+
+**[Watch the Demo Video](https://drive.google.com/file/d/YOUR_VIDEO_ID/view)** *(Upload your screen recording here)*
 
 ## ✨ Features
 
-- ✅ **CLI-based Job Queue Management** - Enqueue and manage jobs via command line
-- ✅ **Multiple Worker Support** - Run multiple workers in parallel
-- ✅ **Automatic Retries** - Failed jobs retry with exponential backoff
-- ✅ **Dead Letter Queue** - Permanently failed jobs moved to DLQ for review
-- ✅ **Persistent Storage** - SQLite database ensures jobs survive restarts
-- ✅ **Configurable Settings** - Adjust retry count, backoff, and timeouts
-- ✅ **Graceful Shutdown** - Workers finish current jobs before stopping
-- ✅ **Job Locking** - Prevents duplicate processing across workers
-- ✅ **Rich CLI Output** - Colored, formatted output for better UX
+- ✅ **CLI-based job queue management** - Full control via command-line interface
+- ✅ **Multiple concurrent workers** - Process jobs in parallel
+- ✅ **Automatic retry mechanism** - Exponential backoff for failed jobs
+- ✅ **Dead Letter Queue (DLQ)** - Handle permanently failed jobs
+- ✅ **Persistent storage** - Jobs survive system restarts (JSON-based)
+- ✅ **Job locking** - Prevents duplicate processing
+- ✅ **Graceful shutdown** - Workers finish current jobs before stopping
+- ✅ **Configurable** - Adjust retries, backoff, and timeouts
+- ✅ **Comprehensive logging** - Track job lifecycle
+- ✅ **Job state tracking** - Monitor pending, processing, completed, failed, and dead jobs
 
-## 🚀 Quick Start
+## 📋 Table of Contents
+
+- [Installation](#-installation)
+- [Quick Start](#-quick-start)
+- [Commands](#-commands)
+- [Architecture](#-architecture)
+- [Testing](#-testing)
+- [Configuration](#-configuration)
+- [Assumptions & Trade-offs](#-assumptions--trade-offs)
+
+## 🚀 Installation
 
 ### Prerequisites
 
-- Node.js 14.x or higher
-- npm or yarn
+- Node.js >= 14.0.0
+- npm >= 6.0.0
 
-### Installation
+### Setup
+# QueueCTL — CLI Job Queue (Node.js)
+
+![Node.js Version](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![CI](https://github.com/abhaycoderarmy/IBM-PROJECT/actions/workflows/nodejs.yml/badge.svg)
+
+QueueCTL is a small, production-minded CLI job queue. It supports enqueuing shell commands, running multiple workers, automatic retries with exponential backoff, and a Dead Letter Queue (DLQ). Jobs are persisted to JSON files so state survives restarts.
+
+Quick links
+- Installation & usage: below
+- Tests: `npm test` (cross-platform Node runner)
+- CI: GitHub Actions (runs `npm test`)
+
+## Quick start
+
+Requirements: Node.js >= 14, npm
+
+Clone and install:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/queuectl.git
+git clone https://github.com/abhaycoderarmy/IBM-PROJECT.git
 cd queuectl
-
-# Install dependencies
 npm install
+```
 
-# Link the CLI globally (optional)
+Run locally (no global install required):
+
+```bash
+# enqueue a job from JSON file
+node ./bin/queuectl.js enqueue -f job.json
+
+# or inline (PowerShell users: see Windows tips below)
+node ./bin/queuectl.js enqueue '{"id":"job1","command":"echo Hello"}'
+
+# start 2 workers
+node ./bin/queuectl.js worker start --count 2
+
+# status
+node ./bin/queuectl.js status
+```
+
+Optional: link the CLI globally so you can run `queuectl` directly:
+
+```bash
 npm link
+queuectl --help
 ```
 
-### Basic Usage
+## Commands (examples)
 
-```bash
-# Enqueue a job
-queuectl enqueue '{"command":"echo Hello World"}'
+- Enqueue job (file): `node ./bin/queuectl.js enqueue -f job.json`
+- Enqueue job (inline JSON): `node ./bin/queuectl.js enqueue '{"command":"echo hi"}'`
+- Start workers: `node ./bin/queuectl.js worker start --count 3`
+- Stop workers: `node ./bin/queuectl.js worker stop`
+- List jobs: `node ./bin/queuectl.js list --state pending`
+- DLQ list: `node ./bin/queuectl.js dlq list`
+- DLQ retry: `node ./bin/queuectl.js dlq retry <job-id>`
+- Config set: `node ./bin/queuectl.js config set max-retries 5`
 
-# Start workers
-queuectl worker start --count 3
+PowerShell notes
+- PowerShell may strip or mangle quotes. Use file input (`-f`) when possible.
+- You can also use the `@file` shorthand: `node ./bin/queuectl.js enqueue @job.json`.
+- The CLI strips UTF-8 BOMs and includes a heuristic repair for common PowerShell quoting issues, but complex JSON should be submitted via a file.
 
-# Check status
-queuectl status
+## Testing
 
-# List jobs
-queuectl list --state pending
-
-# Stop workers
-queuectl worker stop
-
-# View DLQ
-queuectl dlq list
-
-# Retry failed job
-queuectl dlq retry <job-id>
-```
-
-## 📚 Documentation
-
-### Job Structure
-
-Each job contains the following fields:
-
-```json
-{
-  "id": "unique-job-id",           // Auto-generated if not provided
-  "command": "echo 'Hello'",       // Shell command to execute
-  "state": "pending",              // Current job state
-  "attempts": 0,                   // Number of execution attempts
-  "max_retries": 3,                // Maximum retry attempts
-  "created_at": "2025-11-04T10:30:00Z",
-  "updated_at": "2025-11-04T10:30:00Z"
-}
-```
-
-### Job Lifecycle
-
-```
-pending → processing → completed ✓
-    ↓          ↓
-    └── failed ──→ (retry with backoff)
-         ↓
-    dead (DLQ)
-```
-
-### CLI Commands
-
-#### Enqueue Jobs
-
-```bash
-# Basic job
-queuectl enqueue '{"command":"echo Hello"}'
-
-# With custom ID
-queuectl enqueue '{"id":"job123","command":"sleep 5"}'
-
-# With custom retry count
-queuectl enqueue '{"command":"curl api.com","max_retries":5}'
-```
-
-#### Worker Management
-
-```bash
-# Start single worker
-queuectl worker start
-
-# Start multiple workers
-queuectl worker start --count 5
-
-# Stop all workers
-queuectl worker stop
-```
-
-#### Monitoring
-
-```bash
-# View queue status
-queuectl status
-
-# List all jobs
-queuectl list
-
-# List by state
-queuectl list --state pending
-queuectl list --state completed
-queuectl list --state failed
-```
-
-#### Dead Letter Queue
-
-```bash
-# List DLQ jobs
-queuectl dlq list
-
-# Retry a specific job
-queuectl dlq retry job-id-here
-```
-
-#### Configuration
-
-```bash
-# View all config
-queuectl config get
-
-# Set max retries
-queuectl config set max-retries 5
-
-# Set backoff base (exponential)
-queuectl config set backoff-base 2
-
-# Set worker poll interval (ms)
-queuectl config set worker-poll-interval 2000
-
-# Set job timeout (ms)
-queuectl config set job-timeout 60000
-```
-
-## 🏗️ Architecture
-
-### Component Overview
-
-```
-┌─────────────┐
-│   CLI       │  Command-line interface
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  Commands   │  Command handlers
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  JobQueue   │  Queue management logic
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  Database   │  SQLite storage
-└─────────────┘
-
-┌─────────────┐
-│  Workers    │  Parallel job processors
-└──────┬──────┘
-       │
-┌──────▼──────┐
-│  Executor   │  Shell command execution
-└─────────────┘
-```
-
-### Key Components
-
-1. **Database (SQLite)**
-   - Persistent job storage
-   - WAL mode for concurrent access
-   - Indexed for fast queries
-
-2. **JobQueue**
-   - Job enqueuing and retrieval
-   - State management
-   - Retry logic with exponential backoff
-   - DLQ management
-
-3. **Worker**
-   - Polls for pending jobs
-   - Executes commands via child process
-   - Updates job status
-   - Graceful shutdown support
-
-4. **Executor**
-   - Safe command execution
-   - Timeout handling
-   - Exit code detection
-
-5. **Config**
-   - JSON-based configuration
-   - Runtime updates
-   - Defaults with overrides
-
-### Retry Mechanism
-
-Failed jobs retry with exponential backoff:
-
-```
-delay = backoff_base ^ attempts
-
-Example with base=2:
-- Attempt 1 fails → retry after 2¹ = 2 seconds
-- Attempt 2 fails → retry after 2² = 4 seconds
-- Attempt 3 fails → retry after 2³ = 8 seconds
-- After max_retries → moved to DLQ
-```
-
-### Concurrency & Locking
-
-- Jobs are locked when picked up by a worker (worker_id assignment)
-- Database updates use transactions to prevent race conditions
-- Multiple workers can safely process different jobs
-
-## 🧪 Testing
-
-### Run Test Suite
+Run the cross-platform test suite:
 
 ```bash
 npm test
 ```
 
-### Manual Test Scenarios
+This executes `tests/test-scenarios.js`, which validates:
+- Basic job completion
+- Retry/backoff and DLQ
+- Multiple workers
+- Invalid command handling
+- Configuration and DLQ retry
 
-```bash
-# Test 1: Basic job completion
-queuectl enqueue '{"command":"echo Test1"}'
-queuectl worker start --count 1
-sleep 2
-queuectl status
-queuectl worker stop
+Tests clean up generated files and reset `data/*.json` after running.
 
-# Test 2: Failed job with retry
-queuectl enqueue '{"command":"exit 1","max_retries":2}'
-queuectl worker start --count 1
-sleep 10
-queuectl dlq list
-queuectl worker stop
+## Architecture (overview)
 
-# Test 3: Multiple workers
-for i in {1..10}; do queuectl enqueue "{\"command\":\"sleep 1\"}"; done
-queuectl worker start --count 3
-sleep 5
-queuectl status
-queuectl worker stop
+- CLI (`bin/queuectl.js`) — commander-based CLI wiring
+- JobManager (`src/core/JobManager.js`) — job lifecycle, persistence API
+- WorkerManager (`src/core/WorkerManager.js`) — worker loop, locking
+- JobExecutor (`src/core/JobExecutor.js`) — executes shell commands with timeout
+- RetryManager (`src/core/RetryManager.js`) — backoff and DLQ handling
+- JSONStorage (`src/storage/JSONStorage.js`) — file-based persistence with simple file locking
 
-# Test 4: Invalid command
-queuectl enqueue '{"command":"nonexistentcmd"}'
-queuectl worker start --count 1
-sleep 8
-queuectl list --state dead
-queuectl worker stop
-
-# Test 5: Job persistence (restart test)
-queuectl enqueue '{"command":"echo Persistent"}'
-# Restart your terminal or machine
-queuectl worker start --count 1
-sleep 2
-queuectl list --state completed
-```
-
-## 📊 Configuration Options
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| MAX_RETRIES | 3 | Maximum retry attempts before DLQ |
-| BACKOFF_BASE | 2 | Exponential backoff base (delay = base^attempts) |
-| WORKER_POLL_INTERVAL | 1000 | Worker polling interval in milliseconds |
-| JOB_TIMEOUT | 300000 | Maximum job execution time (5 minutes) |
-
-## 🔍 Assumptions & Trade-offs
-
-### Assumptions
-- Commands are shell-compatible and safe to execute
-- SQLite provides sufficient performance for the use case
-- Workers run on the same machine as the database
-- No job priority system needed initially
-
-### Trade-offs
-- **SQLite vs. Redis**: Chose SQLite for simplicity and zero external dependencies
-- **Polling vs. Events**: Using polling for simplicity; could use file watchers for better efficiency
-- **Single Machine**: Designed for single-machine deployment; would need distributed locking for multi-machine
-- **No Job Priority**: All jobs treated equally; could add priority queues as enhancement
-
-## 🌟 Future Enhancements
-
-- [ ] Job priority queues
-- [ ] Scheduled/delayed jobs
-- [ ] Job output logging to files
-- [ ] Metrics and execution statistics
-- [ ] Web dashboard for monitoring
-- [ ] Webhook notifications on job completion
-- [ ] Job dependencies and workflows
-- [ ] Rate limiting per job type
-
-## 📝 Project Structure
+Jobs are stored under `data/`:
 
 ```
-queuectl/
-├── bin/
-│   └── queuectl.js          # CLI entry point
-├── src/
-│   ├── core/
-│   │   ├── Database.js      # SQLite database management
-│   │   ├── JobQueue.js      # Job queue operations
-│   │   ├── Worker.js        # Worker process logic
-│   │   └── Config.js        # Configuration management
-│   ├── commands/
-│   │   ├── enqueue.js       # Enqueue command
-│   │   ├── worker.js        # Worker commands
-│   │   ├── status.js        # Status command
-│   │   ├── list.js          # List command
-│   │   ├── dlq.js           # DLQ commands
-│   │   └── config.js        # Config commands
-│   ├── utils/
-│   │   ├── logger.js        # Logging utilities
-│   │   └── executor.js      # Command executor
-│   └── constants.js         # Application constants
-├── tests/
-│   └── test-scenarios.js    # Test suite
-├── data/                    # Database and config files
-├── package.json
-└── README.md
+data/
+├─ jobs.json   # active jobs
+├─ dlq.json    # dead letter queue
+├─ config.json # configuration
+└─ workers.json
 ```
 
-## 🤝 Contributing
+## Configuration
 
-Contributions are welcome! Please follow these steps:
+Defaults are in `src/constants.js`:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```json
+{
+  "maxRetries": 3,
+  "backoffBase": 2,
+  "workerPollInterval": 1000,
+  "jobTimeout": 300000
+}
+```
 
-## 📄 License
+Change via CLI, e.g.:
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+```
+node ./bin/queuectl.js config set max-retries 5
+```
 
-## 👨‍💻 Author
+Backoff formula: `delay = base ^ attempts` (seconds). Attempts start at 1 when first retried.
 
-Your Name - [GitHub](https://github.com/yourusername)
+## Implementation notes & trade-offs
 
-## 🙏 Acknowledgments
+- Persistence uses JSON files for simplicity — good for demos and small workloads. For production consider Redis or a relational DB.
+- Locking is implemented via atomic updates and a `.lock` file to avoid concurrent file writes. Stale locks may require manual cleanup or a TTL enhancement.
+- The test runner is Node-based and cross-platform.
 
-- Built for QueueCTL Backend Developer Internship Assignment
-- Inspired by production queue systems like Sidekiq, Bull, and BullMQ
+## Contributing / Next steps
+
+- Add CI badges and publish a release.
+- Replace JSON storage with Redis or SQLite for scale.
+- Add metrics or a simple UI for monitoring.
+
+## License
+
+MIT
 
 ---
 
-**Note**: This is a demonstration project built for educational purposes. For production use, consider additional features like authentication, monitoring, and distributed architecture.
+If you want, I can add a CI badge to the README that points to your repository settings or create a small GitHub Actions matrix for multiple Node versions.

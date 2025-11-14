@@ -1,43 +1,76 @@
-const JobQueue = require('../core/JobQueue');
+const JobManager = require('../core/JobManager');
 const Logger = require('../utils/logger');
 const chalk = require('chalk');
+const Validators = require('../utils/validators');
 
-function listCommand(state) {
-  const queue = new JobQueue();
-  const jobs = queue.listJobs(state);
-  queue.close();
+async function listCommand(options) {
+  try {
+    const jobManager = new JobManager();
+    let jobs;
 
-  if (jobs.length === 0) {
-    Logger.info(`No jobs found${state ? ` with state: ${state}` : ''}`);
-    return;
-  }
+    if (options.state) {
+      // Validate state
+      if (!Validators.validateJobState(options.state)) {
+        Logger.error(`Invalid state: ${options.state}`);
+        Logger.info('Valid states: pending, processing, completed, failed, dead');
+        process.exit(1);
+      }
+      jobs = await jobManager.getJobsByState(options.state);
+    } else {
+      jobs = await jobManager.getAllJobs();
+    }
 
-  console.log(chalk.bold(`\n📋 Jobs ${state ? `(${state})` : '(all)'}\n`));
+    if (jobs.length === 0) {
+      Logger.info('No jobs found');
+      return;
+    }
 
-  const tableData = jobs.slice(0, 50).map(job => ({
-    ID: job.id.substring(0, 12) + '...',
-    Command: job.command.substring(0, 40) + (job.command.length > 40 ? '...' : ''),
-    State: getStateColor(job.state),
-    Attempts: `${job.attempts}/${job.max_retries}`,
-    Created: new Date(job.created_at).toLocaleString()
-  }));
+    console.log(chalk.bold.cyan(`\n📋 Jobs ${options.state ? `(${options.state})` : ''}\n`));
 
-  console.table(tableData);
+    // Display jobs in a formatted table
+    jobs.forEach(job => {
+      const stateColor = getStateColor(job.state);
+      console.log(chalk.bold(`ID: ${job.id}`));
+      console.log(`  Command:    ${job.command}`);
+      console.log(`  State:      ${stateColor(job.state)}`);
+      console.log(`  Attempts:   ${job.attempts}/${job.max_retries}`);
+      console.log(`  Created:    ${new Date(job.created_at).toLocaleString()}`);
+      
+      if (job.last_error) {
+        console.log(chalk.red(`  Error:      ${job.last_error}`));
+      }
+      
+      if (job.output) {
+        console.log(chalk.gray(`  Output:     ${job.output.substring(0, 100)}${job.output.length > 100 ? '...' : ''}`));
+      }
+      
+      if (job.retry_at) {
+        const retryTime = new Date(job.retry_at);
+        const now = new Date();
+        const remaining = Math.max(0, Math.floor((retryTime - now) / 1000));
+        console.log(chalk.yellow(`  Retry in:   ${remaining}s`));
+      }
+      
+      console.log('');
+    });
 
-  if (jobs.length > 50) {
-    Logger.info(`Showing 50 of ${jobs.length} jobs`);
+    console.log(chalk.gray(`Total: ${jobs.length} job(s)\n`));
+
+  } catch (error) {
+    Logger.error('Failed to list jobs:', error);
+    process.exit(1);
   }
 }
 
 function getStateColor(state) {
   const colors = {
-    pending: chalk.yellow(state),
-    processing: chalk.blue(state),
-    completed: chalk.green(state),
-    failed: chalk.red(state),
-    dead: chalk.magenta(state)
+    pending: chalk.yellow,
+    processing: chalk.blue,
+    completed: chalk.green,
+    failed: chalk.red,
+    dead: chalk.magenta
   };
-  return colors[state] || state;
+  return colors[state] || chalk.white;
 }
 
 module.exports = listCommand;

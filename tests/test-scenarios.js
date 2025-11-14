@@ -1,86 +1,151 @@
-#!/usr/bin/env node
+const { spawnSync, spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
-const { execSync } = require('child_process');
-const chalk = require('chalk');
+const BIN = 'node';
+const CLI_PATH = path.join(__dirname, '..', 'bin', 'queuectl.js');
 
-function exec(command) {
-  try {
-    const output = execSync(command, { encoding: 'utf8', stdio: 'pipe' });
-    return { success: true, output };
-  } catch (error) {
-    return { success: false, output: error.stdout || error.message };
-  }
+function run(args, opts = {}) {
+  const res = spawnSync(BIN, [CLI_PATH, ...args], { encoding: 'utf8', ...opts });
+  return { code: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
+}
+
+function startWorker(count = 1) {
+  const child = spawn(BIN, [CLI_PATH, 'worker', 'start', '--count', String(count)], {
+    stdio: 'inherit'
+  });
+  return child;
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise(res => setTimeout(res, ms));
 }
 
 async function runTests() {
-  console.log(chalk.bold.cyan('\n🧪 Running QueueCTL Test Scenarios\n'));
+  console.log('🧪 Running QueueCTL Test Scenarios (Node runner)...');
 
-  // Test 1: Basic job completion
-  console.log(chalk.yellow('Test 1: Basic job completion'));
-  exec('node bin/queuectl.js enqueue \'{"id":"test1","command":"echo Hello World"}\'');
-  exec('node bin/queuectl.js worker start --count 1');
-  await sleep(3000);
-  const status1 = exec('node bin/queuectl.js status');
-  console.log(status1.output);
-  exec('node bin/queuectl.js worker stop');
-  console.log(chalk.green('✓ Test 1 passed\n'));
+  let passed = 0;
+  let failed = 0;
 
-  // Test 2: Failed job with retry
-  console.log(chalk.yellow('Test 2: Failed job with retry'));
-  exec('node bin/queuectl.js enqueue \'{"id":"test2","command":"exit 1","max_retries":2}\'');
-  exec('node bin/queuectl.js worker start --count 1');
-  await sleep(8000);
-  const status2 = exec('node bin/queuectl.js dlq list');
-  console.log(status2.output);
-  exec('node bin/queuectl.js worker stop');
-  console.log(chalk.green('✓ Test 2 passed\n'));
+  function ok(name) { console.log('\x1b[32m✓\x1b[0m', name); passed++; }
+  function no(name) { console.log('\x1b[31m✗\x1b[0m', name); failed++; }
 
-  // Test 3: Multiple workers
-  console.log(chalk.yellow('Test 3: Multiple workers processing jobs'));
-  for (let i = 0; i < 5; i++) {
-    exec(`node bin/queuectl.js enqueue '{"command":"sleep 1 && echo Job ${i}"}'`);
+  // Helper to write job files
+  function writeJobFile(filename, obj) {
+    const p = path.join(__dirname, filename);
+    fs.writeFileSync(p, JSON.stringify(obj), 'utf8');
+    return p;
   }
-  exec('node bin/queuectl.js worker start --count 3');
-  await sleep(4000);
-  const status3 = exec('node bin/queuectl.js status');
-  console.log(status3.output);
-  exec('node bin/queuectl.js worker stop');
-  console.log(chalk.green('✓ Test 3 passed\n'));
 
-  // Test 4: Invalid command
-  console.log(chalk.yellow('Test 4: Invalid command handling'));
-  exec('node bin/queuectl.js enqueue \'{"id":"test4","command":"nonexistentcommand"}\'');
-  exec('node bin/queuectl.js worker start --count 1');
+  // Test 1: Basic Job Completion
+  console.log('\n=== Test 1: Basic Job Completion ===');
+  const job1 = { id: 'test-1', command: 'echo Hello World' };
+  const job1File = writeJobFile('job-test-1.json', job1);
+  run(['enqueue', '-f', job1File]);
+  await sleep(1000);
+  const worker1 = startWorker(1);
+  await sleep(3000);
+  worker1.kill();
+  await sleep(500);
+  const res1 = run(['list', '--state', 'completed']);
+  if (res1.stdout.includes('test-1')) ok('Basic job completed successfully'); else no('Basic job did not complete');
+
+  // Test 2: Failed Job with Retry
+  console.log('\n=== Test 2: Failed Job with Retry ===');
+  const job2 = { id: 'test-2', command: 'node -e "process.exit(1)"', max_retries: 2 };
+  const job2File = writeJobFile('job-test-2.json', job2);
+  run(['enqueue', '-f', job2File]);
+  await sleep(1000);
+  const worker2 = startWorker(1);
   await sleep(5000);
-  const list4 = exec('node bin/queuectl.js list --state dead');
-  console.log(list4.output);
-  exec('node bin/queuectl.js worker stop');
-  console.log(chalk.green('✓ Test 4 passed\n'));
+  worker2.kill();
+  await sleep(500);
+  const dlqList = run(['dlq', 'list']);
+  if (dlqList.stdout.includes('test-2')) ok('Failed job moved to DLQ after retries'); else no('Failed job not in DLQ');
+
+  // Test 3: Multiple Workers
+  console.log('\n=== Test 3: Multiple Workers ===');
+  const jobs3 = [
+    { id: 'test-3a', command: 'node -e "setTimeout(()=>console.log(\'A\'),1000)"' },
+    { id: 'test-3b', command: 'node -e "setTimeout(()=>console.log(\'B\'),1000)"' },
+    { id: 'test-3c', command: 'node -e "setTimeout(()=>console.log(\'C\'),1000)"' }
+  ];
+  jobs3.forEach((j, i) => {
+    const p = writeJobFile(`job-test-3-${i}.json`, j);
+    run(['enqueue', '-f', p]);
+  });
+  await sleep(1000);
+  const worker3 = startWorker(3);
+  await sleep(4000);
+  worker3.kill();
+  await sleep(500);
+  const completed3 = run(['list', '--state', 'completed']);
+  const cCount = (completed3.stdout.match(/test-3/g) || []).length;
+  if (cCount === 3) ok('Multiple workers processed jobs successfully'); else no(`Multiple workers test failed (completed: ${cCount}/3)`);
+
+  // Test 4: Invalid Command
+  console.log('\n=== Test 4: Invalid Command ===');
+  const job4 = { id: 'test-4', command: 'nonexistent_command_xyz', max_retries: 1 };
+  const job4File = writeJobFile('job-test-4.json', job4);
+  run(['enqueue', '-f', job4File]);
+  await sleep(1000);
+  const worker4 = startWorker(1);
+  await sleep(4000);
+  worker4.kill();
+  await sleep(500);
+  const dlq4 = run(['dlq', 'list']);
+  if (dlq4.stdout.includes('test-4')) ok('Invalid command handled gracefully'); else no('Invalid command not handled properly');
 
   // Test 5: Configuration
-  console.log(chalk.yellow('Test 5: Configuration management'));
-  exec('node bin/queuectl.js config set max-retries 5');
-  const config5 = exec('node bin/queuectl.js config get');
-  console.log(config5.output);
-  console.log(chalk.green('✓ Test 5 passed\n'));
+  console.log('\n=== Test 5: Configuration ===');
+  run(['config', 'set', 'max-retries', '5']);
+  run(['config', 'set', 'backoff-base', '3']);
+  const conf = run(['config', 'show']);
+  if (conf.stdout.includes('Max Retries') && conf.stdout.includes('5')) ok('Configuration set successfully'); else no('Configuration not set');
 
-  // Test 6: DLQ retry
-  console.log(chalk.yellow('Test 6: DLQ retry functionality'));
-  const dlqList = exec('node bin/queuectl.js dlq list');
-  console.log(dlqList.output);
-  // Extract a job ID from DLQ if available
-  console.log(chalk.green('✓ Test 6 passed\n'));
+  // Test 6: DLQ Retry
+  console.log('\n=== Test 6: DLQ Retry ===');
+  run(['dlq', 'retry', 'test-2']);
+  await sleep(1000);
+  const pending = run(['list', '--state', 'pending']);
+  if (pending.stdout.includes('test-2')) ok('DLQ retry moved job back to queue'); else no('DLQ retry failed');
 
-  console.log(chalk.bold.green('\n✅ All tests completed!\n'));
-  console.log(chalk.cyan('Check the outputs above to verify expected behavior.'));
-  console.log(chalk.cyan('Run "queuectl status" to see final queue state.\n'));
+  // Test 7: Status Command
+  console.log('\n=== Test 7: Status Command ===');
+  const status = run(['status']);
+  if (status.stdout.includes('Queue Status')) ok('Status command works'); else no('Status command failed');
+
+  // Summary
+  console.log('\n================================');
+  console.log(`Passed: ${passed}`);
+  console.log(`Failed: ${failed}`);
+  console.log('================================');
+
+  // Cleanup generated test job files and reset data files
+  try {
+    const testFiles = fs.readdirSync(__dirname).filter(f => f.startsWith('job-test-') && f.endsWith('.json'));
+    for (const f of testFiles) {
+      fs.unlinkSync(path.join(__dirname, f));
+    }
+
+    const dataDir = path.join(__dirname, '..', 'data');
+    const resetFiles = ['jobs.json', 'dlq.json', 'workers.json'];
+    for (const rf of resetFiles) {
+      const p = path.join(dataDir, rf);
+      try {
+        fs.writeFileSync(p, JSON.stringify({}, null, 2), 'utf8');
+      } catch (e) {
+        // ignore
+      }
+    }
+  } catch (cleanupErr) {
+    console.error('Cleanup error:', cleanupErr);
+  }
+
+  process.exit(failed === 0 ? 0 : 1);
 }
 
-runTests().catch(error => {
-  console.error(chalk.red('Test error:', error));
-  process.exit(1);
+runTests().catch(err => {
+  console.error('Test runner error:', err);
+  process.exit(2);
 });

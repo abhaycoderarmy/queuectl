@@ -1,41 +1,36 @@
-const { spawn } = require('child_process');
-const Worker = require('../core/Worker');
+const WorkerManager = require('../core/WorkerManager');
 const Logger = require('../utils/logger');
 
-function startWorkers(count) {
-  const numWorkers = parseInt(count) || 1;
-  
-  if (numWorkers < 1 || numWorkers > 10) {
-    Logger.error('Worker count must be between 1 and 10');
+async function startWorkers(options) {
+  try {
+    const count = parseInt(options.count) || 1;
+
+    if (count < 1 || count > 10) {
+      Logger.error('Worker count must be between 1 and 10');
+      process.exit(1);
+    }
+
+    const workerManager = new WorkerManager();
+    workerManager.setupGracefulShutdown();
+
+    await workerManager.startWorkers(count);
+
+    // Keep process alive
+    await new Promise(() => {});
+
+  } catch (error) {
+    Logger.error('Failed to start workers:', error);
     process.exit(1);
   }
-
-  Logger.info(`Starting ${numWorkers} worker(s)...`);
-
-  for (let i = 0; i < numWorkers; i++) {
-    const worker = spawn('node', ['-e', `
-      const Worker = require('./src/core/Worker');
-      const worker = new Worker();
-      worker.start();
-    `], {
-      detached: true,
-      stdio: 'inherit',
-      cwd: process.cwd()
-    });
-
-    worker.unref();
-  }
-
-  Logger.success(`${numWorkers} worker(s) started`);
 }
 
-function stopWorkers() {
-  const stoppedCount = Worker.stopAllWorkers();
-  
-  if (stoppedCount > 0) {
-    Logger.success(`Stopped ${stoppedCount} worker(s)`);
-  } else {
-    Logger.info('No active workers found');
+async function stopWorkers() {
+  try {
+    const workerManager = new WorkerManager();
+    await workerManager.stopWorkers();
+  } catch (error) {
+    Logger.error('Failed to stop workers:', error);
+    process.exit(1);
   }
 }
 

@@ -1,0 +1,6 @@
+﻿{
+  "id": "fail-001",
+  "command": "node -e \"process.exit(1)\"",
+  "max_retries": 1,
+  "meta": { "demo": "fail" }
+}

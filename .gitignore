@@ -39,5 +39,5 @@ tmp/
 temp/
 
 # Demo job files created during recording/tests
+# job-demo.json is still ignored to avoid committing transient demo file
 job-demo.json
-job-fail.json
